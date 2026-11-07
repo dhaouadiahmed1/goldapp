@@ -1,4 +1,24 @@
-# GoldApp v0.5 — Android gold dashboard
+# LiveMarkets v0.6 — Android markets dashboard (was GoldApp)
+
+## What's new in v0.6 (LiveMarkets rename + Markets tab)
+- **Renamed to LiveMarkets:** the app is no longer gold-only, so the display
+  name is now LiveMarkets (top bar and phone home screen). The code package
+  stays `app.goldapp` and the GitHub repo stays `goldapp` — nothing breaks.
+- **Markets tab, 5th dock icon:** a new Markets Live tab, last in the floating
+  dock (chart icon with a small green LIVE dot). Still icons only, fast gold
+  pill, same floating dock. Order: Home, News, Calendar, Daily Check, Markets.
+- **Markets screen:** category chips Metals / Crypto / Forex. Assets: Gold
+  (XAU/USD), Silver (XAG/USD), Bitcoin, Ethereum, Solana, EUR/USD, GBP/USD,
+  USD/JPY. Each row shows the live price and a green/red change chip.
+- **Each asset has its own screen:** big price + change chip, its own chart
+  with 1D / 1W / 1M buttons chosen by the user, low–high for the chosen range
+  computed from the real chart data, one line on what moves it, and its OWN
+  news list below (Bitcoin news on Bitcoin, Silver news on Silver, …).
+- **Data, no key:** Yahoo Finance chart API for crypto, forex and futures
+  (ranges 1d/15m, 5d/1d, 1mo/1d), gold-api.com spot for gold (XAU) and silver
+  (XAG), Google News RSS per asset. If a feed fails, that asset shows
+  "couldn't load" and the rest keep working. Weekend: forex/metals show
+  Friday's close with a "market closed" note; crypto trades 24/7.
 
 ## What's new in v0.5 (floating dock nav — icons only, fast)
 - **Floating dock:** the bottom bar is no longer full-width edge-to-edge.
