@@ -35,6 +35,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -67,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import app.goldapp.data.GoldState
 import app.goldapp.data.NewsItem
 import app.goldapp.ui.GoldViewModel
+import app.goldapp.ui.theme.GoldAccent
 import app.goldapp.ui.theme.GoldAppTheme
 import app.goldapp.ui.theme.GoldGreen
 import app.goldapp.ui.theme.GoldPrimary
@@ -87,6 +89,9 @@ class MainActivity : ComponentActivity() {
 
 private enum class Tab(val label: String) { HOME("Home"), NEWS("News"), CALENDAR("Calendar"), CHECK("Daily Check") }
 
+/** Reference level shown on the Target card. Not a prediction, not advice. */
+private const val REFERENCE_TARGET = 4500.0
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GoldApp(viewModel: GoldViewModel) {
@@ -96,7 +101,7 @@ fun GoldApp(viewModel: GoldViewModel) {
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -161,7 +166,7 @@ fun GoldApp(viewModel: GoldViewModel) {
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp).fillMaxSize()) {
             when (tab) {
-                Tab.HOME -> HomeScreen(state, onRefresh = { viewModel.refresh() })
+                Tab.HOME -> HomeScreen(state, onRefresh = { viewModel.refresh() }, onNavigate = { tab = it })
                 Tab.NEWS -> NewsScreen(state)
                 Tab.CALENDAR -> CalendarScreen()
                 Tab.CHECK -> DailyCheckScreen(state, viewModel)
@@ -176,7 +181,7 @@ private fun fmtPrice(v: Double?): String =
 private fun fmtPct(v: Double?): String =
     if (v == null) "—" else String.format("%+.2f%%", v)
 
-/** Rounded modern card used across the app. */
+/** Rounded white card used across the app (light finance template). */
 @Composable
 private fun ModernCard(
     modifier: Modifier = Modifier,
@@ -185,7 +190,7 @@ private fun ModernCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = border
     ) {
@@ -214,14 +219,59 @@ private fun ChangeChip(changePercent: Double?) {
     }
 }
 
+/** DXY / 10-year yield mini-card, used on the News tab. */
 @Composable
-fun HomeScreen(state: GoldState, onRefresh: () -> Unit) {
+private fun MarketMiniCard(
+    title: String,
+    value: String,
+    changePercent: Double?,
+    explanation: String,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(title, style = MaterialTheme.typography.labelLarge, color = GoldPrimary, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            ChangeChip(changePercent)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                explanation,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun HomeScreen(state: GoldState, onRefresh: () -> Unit, onNavigate: (Tab) -> Unit) {
     val context = LocalContext.current
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
+            Text("Gold", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "You are on Top",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "of your Gold",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        item {
             ModernCard {
                 Text(
-                    "XAU/USD  •  SPOT",
+                    "Gold price  •  XAU/USD",
                     style = MaterialTheme.typography.labelLarge,
                     color = GoldPrimary,
                     fontWeight = FontWeight.Bold
@@ -266,7 +316,7 @@ fun HomeScreen(state: GoldState, onRefresh: () -> Unit) {
                     onClick = onRefresh,
                     enabled = !state.isRefreshing,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = GoldPrimary,
+                        containerColor = GoldAccent,
                         contentColor = Color(0xFF111111)
                     ),
                     shape = RoundedCornerShape(16.dp),
@@ -297,8 +347,34 @@ fun HomeScreen(state: GoldState, onRefresh: () -> Unit) {
             }
         }
         item {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Card(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Spot", style = MaterialTheme.typography.labelLarge, color = GoldPrimary, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(6.dp))
+                        Text(fmtPrice(state.spotPrice), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Card(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Futures", style = MaterialTheme.typography.labelLarge, color = GoldPrimary, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(6.dp))
+                        Text(fmtPrice(state.futuresPrice), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        item {
             Text(
-                "Dollar & Rates — what moves gold",
+                "Your Activity",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(start = 4.dp, top = 4.dp)
@@ -307,60 +383,36 @@ fun HomeScreen(state: GoldState, onRefresh: () -> Unit) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Card(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).clickable { onNavigate(Tab.NEWS) },
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("DXY", style = MaterialTheme.typography.labelLarge, color = GoldPrimary, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(6.dp))
+                        Text("Gold news", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
                         Text(
-                            state.dxyPrice?.let { String.format("%.2f", it) } ?: "—",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        ChangeChip(state.dxyChangePercent)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Dollar up → gold usually down. Dollar down → gold usually up.",
+                            "Latest headlines, tap to read.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 Card(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).clickable { onNavigate(Tab.CHECK) },
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("10-YEAR YIELD", style = MaterialTheme.typography.labelLarge, color = GoldPrimary, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(6.dp))
+                        Text("Daily Check", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
                         Text(
-                            state.yield10y?.let { String.format("%.2f%%", it) } ?: "—",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        ChangeChip(state.yieldChangePercent)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Yields up → gold usually down. Yields down → gold usually up.",
+                            "Price • Trend • What to watch.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
-        }
-        item {
-            Text(
-                "Source: Yahoo Finance (DX-Y.NYB, ^TNX).",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 4.dp)
-            )
         }
         item {
             OutlinedButton(
@@ -376,7 +428,7 @@ fun HomeScreen(state: GoldState, onRefresh: () -> Unit) {
 
 @Composable
 fun PriceChart(closes: List<Float>) {
-    val gold = GoldPrimary
+    val gold = MaterialTheme.colorScheme.primary
     Canvas(modifier = Modifier.fillMaxWidth().height(160.dp)) {
         val min = closes.minOrNull() ?: 0f
         val max = closes.maxOrNull() ?: 1f
@@ -385,7 +437,7 @@ fun PriceChart(closes: List<Float>) {
         fun yOf(v: Float): Float =
             size.height - ((v - min) / range) * size.height * 0.85f - size.height * 0.075f
         // Faint gridlines
-        val gridColor = Color.White.copy(alpha = 0.08f)
+        val gridColor = Color.Gray.copy(alpha = 0.18f)
         for (i in 1..3) {
             val gy = size.height * i / 4f
             drawLine(gridColor, Offset(0f, gy), Offset(size.width, gy), strokeWidth = 1f)
@@ -422,41 +474,112 @@ fun PriceChart(closes: List<Float>) {
 @Composable
 fun NewsScreen(state: GoldState) {
     val context = LocalContext.current
-    if (state.news.isEmpty()) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(4.dp)) {
-            Text("Gold news", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("No news loaded yet. Check your connection and tap Refresh (top right).")
-            OutlinedButton(onClick = {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://news.google.com/search?q=gold%20price&hl=en-US&gl=US&ceid=US:en")))
-            }, shape = RoundedCornerShape(16.dp)) { Text("Open gold news in browser") }
-        }
-        return
-    }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Gold news", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         item {
+            Text("Markets", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "What moves gold most, right now.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MarketMiniCard(
+                    title = "DXY",
+                    value = state.dxyPrice?.let { String.format("%.2f", it) } ?: "—",
+                    changePercent = state.dxyChangePercent,
+                    explanation = "Dollar up → gold usually down. Dollar down → gold usually up.",
+                    modifier = Modifier.weight(1f)
+                )
+                MarketMiniCard(
+                    title = "10-YEAR YIELD",
+                    value = state.yield10y?.let { String.format("%.2f%%", it) } ?: "—",
+                    changePercent = state.yieldChangePercent,
+                    explanation = "Yields up → gold usually down. Yields down → gold usually up.",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+        item {
+            Text(
+                "Source: Yahoo Finance (DX-Y.NYB, ^TNX).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
+        item {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = GoldAccent),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Daily Check", style = MaterialTheme.typography.labelLarge, color = Color(0xFF111111), fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        fmtPrice(state.spotPrice),
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF111111)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Why it moved, and what to watch today — US CPI, Tue 10 Nov 2026, 14:30 Tunis time.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF111111)
+                    )
+                }
+            }
+        }
+        item {
+            ModernCard {
+                Text("US CPI (inflation) — Tue 10 Nov 2026, 14:30 Tunis time.", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Checked on 7 Nov 2026. CPI is the inflation report — higher than expected usually pushes gold down, lower than expected usually helps gold.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        item {
+            Text("Recent News", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
             Text(
                 "Source: Google News, search \"gold price\". Tap a headline to read it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        items(state.news) { item: NewsItem ->
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.link)))
-                },
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(item.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "${item.source}  •  ${item.time}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+        if (state.news.isEmpty()) {
+            item {
+                Text("No news loaded yet. Check your connection and tap Refresh (top right).")
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://news.google.com/search?q=gold%20price&hl=en-US&gl=US&ceid=US:en")))
+                }, shape = RoundedCornerShape(16.dp)) { Text("Open gold news in browser") }
+            }
+        } else {
+            items(state.news) { item: NewsItem ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.link)))
+                    },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(item.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "${item.source}  •  ${item.time}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -471,7 +594,7 @@ fun CalendarScreen() {
             Text("What moves gold most", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             Text(
-                "v0.2 does not fetch the calendar live. The events below are the ones to watch, in simple words. Tap the button at the bottom for the live calendar in your browser.",
+                "v0.3 does not fetch the calendar live. The events below are the ones to watch, in simple words. Tap the button at the bottom for the live calendar in your browser.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -534,29 +657,104 @@ fun CalendarScreen() {
 
 @Composable
 fun DailyCheckScreen(state: GoldState, viewModel: GoldViewModel) {
+    val spot = state.spotPrice
+    val targetProgress = if (spot == null) 0f else (spot / REFERENCE_TARGET).toFloat().coerceIn(0f, 1f)
+    val targetPercent = if (spot == null) null else (spot / REFERENCE_TARGET * 100).toInt()
+    val rangeLow = state.chartCloses.minOrNull()
+    val rangeHigh = state.chartCloses.maxOrNull()
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text("Daily Check", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Same short format as the WhatsApp check. Updated ${state.lastUpdatedTunis ?: "—"} (Tunis time).",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("Target", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
         item {
             ModernCard {
-                Text("Price", fontWeight = FontWeight.Bold)
+                Text(
+                    if (targetPercent == null) "— of ${fmtPrice(REFERENCE_TARGET)} reference level"
+                    else "$targetPercent% of ${fmtPrice(REFERENCE_TARGET)} reference level",
+                    fontWeight = FontWeight.Bold
+                )
                 Spacer(Modifier.height(4.dp))
-                Text("Gold (XAU/USD): ${fmtPrice(state.spotPrice)} per ounce")
-                Text("Futures today: ${fmtPrice(state.futuresPrice)} (${fmtPct(state.futuresChangePercent)})")
+                Text(
+                    if (spot == null) "Gold price not loaded yet — tap Refresh."
+                    else "Gold is ${fmtPrice(REFERENCE_TARGET - spot)} away from ${fmtPrice(REFERENCE_TARGET)}.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+                LinearProgressIndicator(
+                    progress = targetProgress,
+                    color = GoldAccent,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(6.dp))
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Your progress • ${fmtPrice(spot)} of ${fmtPrice(REFERENCE_TARGET)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Reference level only — not a prediction, not advice. Gold may never reach it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
         item {
             ModernCard {
-                Text("Trend", fontWeight = FontWeight.Bold)
+                Text("30-day range", style = MaterialTheme.typography.labelLarge, color = GoldPrimary, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    if (rangeLow == null || rangeHigh == null) "—"
+                    else "${fmtPrice(rangeLow.toDouble())} — ${fmtPrice(rangeHigh.toDouble())}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
                 Spacer(Modifier.height(4.dp))
-                Text(viewModel.trendWords())
+                Text(
+                    "Low — High, from the last 30 days of live chart data.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        item {
+            Text("Your Stats", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Card(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Daily Check", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Gold: ${fmtPrice(spot)} per ounce. ${viewModel.trendWords()}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Card(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Last updated", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            if (state.fromCache) "Last saved price — ${state.lastUpdatedTunis ?: "—"} (Tunis time)."
+                            else "Updated ${state.lastUpdatedTunis ?: "—"} (Tunis time).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
         item {
