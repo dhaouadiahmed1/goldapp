@@ -3,8 +3,12 @@ package app.goldapp.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import app.goldapp.data.ChartRange
 import app.goldapp.data.GoldRepository
 import app.goldapp.data.GoldState
+import app.goldapp.data.MarketAsset
+import app.goldapp.data.MarketDetail
+import app.goldapp.data.MarketQuote
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,8 +21,33 @@ class GoldViewModel(application: Application) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(repository.cachedOrEmpty().copy(isLoading = true))
     val state: StateFlow<GoldState> = _state.asStateFlow()
 
+    // Markets tab (v0.6): live quotes for all assets + the open asset's detail.
+    private val _marketQuotes = MutableStateFlow<List<MarketQuote>>(emptyList())
+    val marketQuotes: StateFlow<List<MarketQuote>> = _marketQuotes.asStateFlow()
+
+    private val _marketDetail = MutableStateFlow<MarketDetail?>(null)
+    val marketDetail: StateFlow<MarketDetail?> = _marketDetail.asStateFlow()
+
     init {
         refresh()
+        loadMarkets()
+    }
+
+    fun loadMarkets() {
+        viewModelScope.launch {
+            _marketQuotes.value = repository.fetchMarketQuotes()
+        }
+    }
+
+    fun loadAssetDetail(asset: MarketAsset, range: ChartRange) {
+        _marketDetail.value = MarketDetail(asset = asset, range = range, loading = true)
+        viewModelScope.launch {
+            _marketDetail.value = repository.fetchMarketDetail(asset, range)
+        }
+    }
+
+    fun clearAssetDetail() {
+        _marketDetail.value = null
     }
 
     fun refresh() {
