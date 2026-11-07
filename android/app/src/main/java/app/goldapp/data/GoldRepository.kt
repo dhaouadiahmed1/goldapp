@@ -24,9 +24,13 @@ import java.util.concurrent.TimeUnit
  *   https://query1.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?range=5d&interval=1d
  *   https://query2.finance.yahoo.com/v8/finance/chart/%5ETNX?range=5d&interval=1d
  *   All returned HTTP 200 with real prices on 7 Nov 2026.
- * - News: Google News RSS
- *   https://news.google.com/rss/search?q=gold%20price&hl=en-US&gl=US&ceid=US:en
+ * - News: Google News RSS, one query per asset (v0.6 Markets):
+ *   https://news.google.com/rss/search?q=Bitcoin%20price&hl=en-US&gl=US&ceid=US:en
  *   HTTP 200, real items with title / link / pubDate / source.
+ * - Markets (v0.6, checked 8 Nov 2026 with curl, all HTTP 200, real prices):
+ *   Yahoo chart API: BTC-USD, ETH-USD, SOL-USD, EURUSD=X, GBPUSD=X, USDJPY=X,
+ *   SI=F (silver futures), GC=F (gold futures); ranges 1d/15m, 5d/1d, 1mo/1d.
+ *   Silver spot: https://api.gold-api.com/price/XAG -> HTTP 200, live spot price.
  *
  * NOT used (verified broken on 7 Nov 2026):
  * - Kitco RSS (kitco-gold.xml) -> 404
@@ -65,8 +69,10 @@ class GoldRepository(context: Context) {
         null
     }
 
-    private fun fetchSpotPrice(): Double? {
-        val body = get("https://api.gold-api.com/price/XAU") ?: return null
+    private fun fetchSpotPrice(): Double? = fetchSpot("XAU")
+
+    private fun fetchSpot(symbol: String): Double? {
+        val body = get("https://api.gold-api.com/price/$symbol") ?: return null
         return try {
             val json = JSONObject(body)
             val price = json.optDouble("price", Double.NaN)
@@ -76,9 +82,14 @@ class GoldRepository(context: Context) {
         }
     }
 
-    private fun fetchYahoo(symbol: String, range: String, host: String = "query1"): YahooQuote? {
+    private fun fetchYahoo(
+        symbol: String,
+        range: String,
+        interval: String = "1d",
+        host: String = "query1"
+    ): YahooQuote? {
         val encoded = URLEncoder.encode(symbol, "UTF-8").replace("+", "%20")
-        val url = "https://$host.finance.yahoo.com/v8/finance/chart/$encoded?range=$range&interval=1d"
+        val url = "https://$host.finance.yahoo.com/v8/finance/chart/$encoded?range=$range&interval=$interval"
         val body = get(url) ?: return null
         return try {
             val result = JSONObject(body)
@@ -90,6 +101,8 @@ class GoldRepository(context: Context) {
                 meta.getDouble("regularMarketPrice") else null
             val change = if (meta.has("regularMarketChangePercent") && !meta.isNull("regularMarketChangePercent"))
                 meta.getDouble("regularMarketChangePercent") else null
+            val prevClose = if (meta.has("previousClose") && !meta.isNull("previousClose"))
+                meta.getDouble("previousClose") else null
             val closes = mutableListOf<Float>()
             try {
                 val quote = result.getJSONObject("indicators")
@@ -101,14 +114,69 @@ class GoldRepository(context: Context) {
             } catch (_: Exception) {
                 // closes are optional; price/change are the important part
             }
-            YahooQuote(symbol, price, change, closes)
+            YahooQuote(symbol, price, change, closes, prevClose)
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun fetchNews(): List<NewsItem> {
-        val url = "https://news.google.com/rss/search?q=gold%20price&hl=en-US&gl=US&ceid=US:en"
+    /** One market quote per asset, fetched in parallel. A failed asset reports failed=true. */
+    suspend fun fetchMarketQuotes(): List<MarketQuote> = withContext(Dispatchers.IO) {
+        kotlinx.coroutines.coroutineScope {
+            MARKET_ASSETS.map { asset ->
+                kotlinx.coroutines.async {
+                    try {
+                        val quote = fetchYahoo(asset.yahooSymbol, "5d")
+                        val spot = asset.spotSymbol?.let { fetchSpot(it) }
+                        val price = spot ?: quote?.price
+                        if (price == null) MarketQuote(asset, failed = true)
+                        else MarketQuote(asset, price, quote?.changePercent)
+                    } catch (_: Exception) {
+                        MarketQuote(asset, failed = true)
+                    }
+                }
+            }.awaitAll()
+        }
+    }
+
+    /** Chart + news for one asset and one range. No fake data: nulls on failure. */
+    suspend fun fetchMarketDetail(asset: MarketAsset, range: ChartRange): MarketDetail =
+        withContext(Dispatchers.IO) {
+            val quote = try {
+                fetchYahoo(asset.yahooSymbol, range.yahooRange, range.interval)
+            } catch (_: Exception) {
+                null
+            }
+            val spot = asset.spotSymbol?.let {
+                try { fetchSpot(it) } catch (_: Exception) { null }
+            }
+            val closes = quote?.closes ?: emptyList()
+            val lastClose = closes.lastOrNull()?.toDouble()
+            val price = spot ?: lastClose ?: quote?.price
+            val change = when {
+                quote == null -> null
+                range == ChartRange.DAY && quote.prevClose != null && price != null && quote.prevClose != 0.0 ->
+                    (price - quote.prevClose) / quote.prevClose * 100.0
+                closes.size >= 2 ->
+                    (closes.last() - closes.first()) / closes.first().toDouble() * 100.0
+                else -> quote.changePercent
+            }
+            val news = try { fetchNews(asset.newsQuery) } catch (_: Exception) { emptyList() }
+            MarketDetail(
+                asset = asset,
+                price = price,
+                changePercent = change,
+                closes = closes,
+                news = news,
+                range = range,
+                error = if (quote == null && spot == null)
+                    "Couldn't load ${asset.name} right now. Check your connection and tap Refresh." else null
+            )
+        }
+
+    private fun fetchNews(query: String = "gold price"): List<NewsItem> {
+        val encoded = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
+        val url = "https://news.google.com/rss/search?q=$encoded&hl=en-US&gl=US&ceid=US:en"
         val body = get(url) ?: return emptyList()
         val items = mutableListOf<NewsItem>()
         try {
