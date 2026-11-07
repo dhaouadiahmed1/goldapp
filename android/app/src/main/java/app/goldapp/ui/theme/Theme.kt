@@ -7,15 +7,34 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Modern GoldApp palette — dark-first, gold accent.
-val GoldPrimary = Color(0xFFD4AF37)
+// GoldApp v0.3 palette — light finance template, gold accent.
+// Light is the main look; dark follows the system for dark-mode users.
+val GoldPrimary = Color(0xFF9A7B0A) // dark gold: readable as text on white
+val GoldAccent = Color(0xFFD4AF37) // bright gold: chart line, filled buttons
 val GoldSecondary = Color(0xFFF6D365)
 val GoldDeep = Color(0xFFB8860B)
-val GoldGreen = Color(0xFF34C759)
-val GoldRed = Color(0xFFFF453A)
+val GoldGreen = Color(0xFF2E9E5B)
+val GoldRed = Color(0xFFE5484D)
+
+private val GoldLightColors = lightColorScheme(
+    primary = GoldPrimary,
+    onPrimary = Color.White,
+    secondary = GoldAccent,
+    onSecondary = Color(0xFF111111),
+    tertiary = GoldDeep,
+    background = Color(0xFFF6F6F8),
+    onBackground = Color(0xFF111111),
+    surface = Color.White,
+    onSurface = Color(0xFF111111),
+    surfaceVariant = Color(0xFFEFEFF2),
+    onSurfaceVariant = Color(0xFF6B6B70),
+    outline = Color(0xFFE2E2E8),
+    error = GoldRed,
+    onError = Color.White
+)
 
 private val GoldDarkColors = darkColorScheme(
-    primary = GoldPrimary,
+    primary = GoldAccent,
     onPrimary = Color(0xFF111111),
     secondary = GoldSecondary,
     onSecondary = Color(0xFF111111),
@@ -31,28 +50,12 @@ private val GoldDarkColors = darkColorScheme(
     onError = Color.White
 )
 
-private val GoldLightColors = lightColorScheme(
-    primary = Color(0xFF9A7B0A),
-    onPrimary = Color.White,
-    secondary = Color(0xFFB8860B),
-    onSecondary = Color.White,
-    tertiary = GoldDeep,
-    background = Color(0xFFF7F5EF),
-    onBackground = Color(0xFF121212),
-    surface = Color.White,
-    onSurface = Color(0xFF121212),
-    surfaceVariant = Color(0xFFEFEDE6),
-    onSurfaceVariant = Color(0xFF5A5A5A),
-    outline = Color(0xFFD8D5CC),
-    error = Color(0xFFD92D20),
-    onError = Color.White
-)
-
 @Composable
 fun GoldAppTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) GoldDarkColors else GoldLightColors
+    // Light-first template; dark follows the system with the v0.2 dark colours.
     MaterialTheme(colorScheme = colorScheme, content = content)
 }
