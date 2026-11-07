@@ -1,4 +1,18 @@
-# GoldApp v0.4 — Android gold dashboard
+# GoldApp v0.5 — Android gold dashboard
+
+## What's new in v0.5 (floating dock nav — icons only, fast)
+- **Floating dock:** the bottom bar is no longer full-width edge-to-edge.
+  It is a detached rounded box (32dp corners, soft shadow, 16dp side
+  margins, 12dp bottom gap) floating above the bottom edge, like an
+  iOS dock. Its background is the theme surface, so it is dark in dark
+  mode and white in light mode, following the phone like v0.3.
+- **Icons only:** no text labels under the icons at all (labels remain
+  only as accessibility descriptions). Modern thin-line outlined icons:
+  Home, Article, DateRange, Assessment.
+- **Fast:** the gold pill slide, the icon pop (1.15×) and the screen
+  fade/slide are all ~180ms (tween, FastOutSlowInEasing) instead of
+  the v0.4 spring — about twice as fast, snappy, no bounce.
+- Same 4 tabs, same order, same screens, data and notifications.
 
 ## What's new in v0.4 (animated nav + local notifications)
 - **Animated bottom nav:** the plain grey-purple NavigationBar is gone.
@@ -68,7 +82,7 @@ Your own gold app, for a beginning trader. Live gold price, a simple
 chart, the dollar and US yields that move gold, gold news, the US events
 to watch, and a short Daily Check — in one place, in simple English.
 
-No account, no API key, no login needed in v0.4. Only INTERNET
+No account, no API key, no login needed in v0.5. Only INTERNET
 permission, plus POST_NOTIFICATIONS (Android 13+) for the news alerts.
 
 ## What it does
