@@ -1,4 +1,25 @@
-# GoldApp v0.2 — Android gold dashboard
+# GoldApp v0.3 — Android gold dashboard
+
+## What's new in v0.3 (UI only — same data, same features)
+- **Light finance template, as approved from the mockup:** light
+  background (#F6F6F8), white rounded cards, gold accent instead of
+  blue. Dark theme is kept and follows the system.
+- **Home:** "Gold / You are on Top of your Gold", white price card
+  with change chip, 30-day chart, Spot / Futures as two mini-cards,
+  and a "Your Activity" section with cards that open the News and
+  Daily Check tabs.
+- **News:** "Markets" at the top — DXY and 10-year yield as two white
+  cards — then a gold Daily Check summary card and the CPI event card,
+  then the same live Recent News list.
+- **Daily Check:** "Target" card with a progress bar toward a $4,500
+  reference level (computed from the live price, labelled "Reference
+  level only — not a prediction, not advice"), a "30-day range" card
+  with low/high computed from the live 30-day chart data, and "Your
+  Stats" — today's Daily Check summary and the real last-updated time.
+  No streak, no saved amount, no fake numbers.
+- **Calendar:** same content, restyled light.
+- No new features, no new permissions, no new dependencies, no
+  price/news logic changed.
 
 ## What's new in v0.2 (UI only — same data, same features)
 - **Modern logo:** a clean minimalist mark — deep charcoal rounded square
@@ -18,7 +39,7 @@ Your own gold app, for a beginning trader. Live gold price, a simple
 chart, the dollar and US yields that move gold, gold news, the US events
 to watch, and a short Daily Check — in one place, in simple English.
 
-No account, no API key, no login needed in v0.2. Only INTERNET permission.
+No account, no API key, no login needed in v0.3. Only INTERNET permission.
 
 ## What it does
 - **Home:** live XAU/USD spot gold price (per ounce) + daily change,
@@ -47,11 +68,11 @@ No account, no API key, no login needed in v0.2. Only INTERNET permission.
 - News: Google News RSS, `news.google.com/rss/search?q=gold+price`
   (real headlines, source, time and link, no key needed)
 
-## Honest limits — v0.2
+## Honest limits — v0.3
 - **No prediction.** No app can tell you where gold will go. GoldApp
   shows the price, the trend and the news — it never gives a buy/sell
   signal. Educational only, not financial advice.
-- **No live calendar fetch in v0.2.** The Calendar tab explains the
+- **No live calendar fetch in v0.3.** The Calendar tab explains the
   events and links to the live calendar in your browser. One event is
   listed as verified, clearly labelled: US CPI, Tue 10 Nov 2026,
   14:30 Tunis time (checked 7 Nov 2026).
