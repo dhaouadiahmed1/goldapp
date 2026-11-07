@@ -126,7 +126,7 @@ class GoldRepository(context: Context) {
     suspend fun fetchMarketQuotes(): List<MarketQuote> = withContext(Dispatchers.IO) {
         kotlinx.coroutines.coroutineScope {
             MARKET_ASSETS.map { asset ->
-                kotlinx.coroutines.async {
+                async {
                     try {
                         val quote = fetchYahoo(asset.yahooSymbol, "5d")
                         val spot = asset.spotSymbol?.let { fetchSpot(it) }
