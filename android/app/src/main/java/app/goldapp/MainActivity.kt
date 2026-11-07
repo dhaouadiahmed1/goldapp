@@ -1,15 +1,37 @@
 package app.goldapp
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.runtime.LaunchedEffect
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +39,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,11 +60,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -54,6 +76,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -73,17 +96,62 @@ import app.goldapp.ui.theme.GoldAppTheme
 import app.goldapp.ui.theme.GoldGreen
 import app.goldapp.ui.theme.GoldPrimary
 import app.goldapp.ui.theme.GoldRed
+import app.goldapp.notifications.GoldNotifications
 
 class MainActivity : ComponentActivity() {
     private val viewModel: GoldViewModel by viewModels()
 
+    // Tab requested by a notification tap (NEWS / CALENDAR). Null = no request.
+    private val _pendingTab = MutableStateFlow<Tab?>(null)
+    private val pendingTab: StateFlow<Tab?> = _pendingTab.asStateFlow()
+
+    private var notificationsEnabled by mutableStateOf(true)
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* granted or not: the News tab explains how to turn it on */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        notificationsEnabled = GoldNotifications.isEnabled(this)
+        GoldNotifications.createChannel(this)
+        if (notificationsEnabled) GoldNotifications.schedule(this)
+        _pendingTab.value = tabFromIntent(intent)
+        askNotificationPermissionOnce()
         setContent {
             GoldAppTheme {
-                GoldApp(viewModel)
+                GoldApp(viewModel, pendingTab, onPendingTabConsumed = { _pendingTab.value = null },
+                    notificationsEnabled = notificationsEnabled,
+                    onNotificationsEnabledChange = { enabled ->
+                        notificationsEnabled = enabled
+                        GoldNotifications.setEnabled(this, enabled)
+                    })
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        tabFromIntent(intent)?.let { _pendingTab.value = it }
+    }
+
+    private fun tabFromIntent(intent: Intent?): Tab? = when (intent?.getStringExtra(GoldNotifications.EXTRA_TAB)) {
+        GoldNotifications.TAB_NEWS -> Tab.NEWS
+        GoldNotifications.TAB_CALENDAR -> Tab.CALENDAR
+        else -> null
+    }
+
+    /** Ask once, on Android 13+, so news notifications can appear. */
+    private fun askNotificationPermissionOnce() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) return
+        val prefs = getSharedPreferences("goldapp_notifications", MODE_PRIVATE)
+        if (prefs.getBoolean("permission_asked", false)) return
+        prefs.edit().putBoolean("permission_asked", true).apply()
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 }
 
@@ -94,9 +162,22 @@ private const val REFERENCE_TARGET = 4500.0
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GoldApp(viewModel: GoldViewModel) {
+private fun GoldApp(
+    viewModel: GoldViewModel,
+    pendingTab: StateFlow<Tab?>,
+    onPendingTabConsumed: () -> Unit,
+    notificationsEnabled: Boolean,
+    onNotificationsEnabledChange: (Boolean) -> Unit
+) {
     val state by viewModel.state.collectAsState()
     var tab by remember { mutableStateOf(Tab.HOME) }
+    val requestedTab by pendingTab.collectAsState()
+    LaunchedEffect(requestedTab) {
+        requestedTab?.let {
+            tab = it
+            onPendingTabConsumed()
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -134,42 +215,104 @@ fun GoldApp(viewModel: GoldViewModel) {
             )
         },
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface
-            ) {
-                NavigationBarItem(
-                    selected = tab == Tab.HOME,
-                    onClick = { tab = Tab.HOME },
-                    icon = { Icon(Icons.Filled.Home, contentDescription = null) },
-                    label = { Text("Home") }
-                )
-                NavigationBarItem(
-                    selected = tab == Tab.NEWS,
-                    onClick = { tab = Tab.NEWS },
-                    icon = { Icon(Icons.Filled.Article, contentDescription = null) },
-                    label = { Text("News") }
-                )
-                NavigationBarItem(
-                    selected = tab == Tab.CALENDAR,
-                    onClick = { tab = Tab.CALENDAR },
-                    icon = { Icon(Icons.Filled.DateRange, contentDescription = null) },
-                    label = { Text("Calendar") }
-                )
-                NavigationBarItem(
-                    selected = tab == Tab.CHECK,
-                    onClick = { tab = Tab.CHECK },
-                    icon = { Icon(Icons.Filled.Assessment, contentDescription = null) },
-                    label = { Text("Daily Check") }
-                )
-            }
+            AnimatedBottomBar(selectedTab = tab, onTabSelected = { tab = it })
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp).fillMaxSize()) {
-            when (tab) {
-                Tab.HOME -> HomeScreen(state, onRefresh = { viewModel.refresh() }, onNavigate = { tab = it })
-                Tab.NEWS -> NewsScreen(state)
-                Tab.CALENDAR -> CalendarScreen()
-                Tab.CHECK -> DailyCheckScreen(state, viewModel)
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    (fadeIn() + slideInVertically { it / 6 }) togetherWith
+                        (fadeOut() + slideOutVertically { -it / 6 })
+                },
+                label = "tabSwitch"
+            ) { currentTab ->
+                when (currentTab) {
+                    Tab.HOME -> HomeScreen(state, onRefresh = { viewModel.refresh() }, onNavigate = { tab = it })
+                    Tab.NEWS -> NewsScreen(state, notificationsEnabled, onNotificationsEnabledChange)
+                    Tab.CALENDAR -> CalendarScreen()
+                    Tab.CHECK -> DailyCheckScreen(state, viewModel)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Animated bottom bar (v0.4): a gold pill slides between tabs on a spring,
+ * the selected icon pops (scale ~1.15, slight lift) and its label turns
+ * bold gold. Unselected tabs stay grey. Same 4 tabs, same order.
+ */
+@Composable
+private fun AnimatedBottomBar(selectedTab: Tab, onTabSelected: (Tab) -> Unit) {
+    val tabs = listOf(
+        Tab.HOME to Icons.Filled.Home,
+        Tab.NEWS to Icons.Filled.Article,
+        Tab.CALENDAR to Icons.Filled.DateRange,
+        Tab.CHECK to Icons.Filled.Assessment
+    )
+    val selectedIndex = tabs.indexOfFirst { it.first == selectedTab }.coerceAtLeast(0)
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+        ) {
+            val itemWidth = maxWidth / tabs.size
+            val pillOffset by animateDpAsState(
+                targetValue = itemWidth * selectedIndex,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
+                label = "pillSlide"
+            )
+            // Gold sliding pill behind the selected tab.
+            Box(
+                modifier = Modifier
+                    .offset(x = pillOffset + 8.dp, y = 0.dp)
+                    .size(width = itemWidth - 16.dp, height = 52.dp)
+                    .background(GoldAccent, RoundedCornerShape(26.dp))
+            )
+            Row(modifier = Modifier.fillMaxWidth()) {
+                tabs.forEach { (tab, icon) ->
+                    val selected = tab == selectedTab
+                    val scale by animateFloatAsState(
+                        targetValue = if (selected) 1.15f else 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        label = "iconPop"
+                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onTabSelected(tab) }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Icon(
+                            icon,
+                            contentDescription = tab.label,
+                            tint = if (selected) Color(0xFF111111)
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                    translationY = if (selected) -4f else 0f
+                                }
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            tab.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selected) Color(0xFF111111)
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
     }
@@ -427,7 +570,7 @@ private fun HomeScreen(state: GoldState, onRefresh: () -> Unit, onNavigate: (Tab
 }
 
 @Composable
-fun PriceChart(closes: List<Float>) {
+private fun PriceChart(closes: List<Float>) {
     val gold = MaterialTheme.colorScheme.primary
     Canvas(modifier = Modifier.fillMaxWidth().height(160.dp)) {
         val min = closes.minOrNull() ?: 0f
@@ -472,9 +615,48 @@ fun PriceChart(closes: List<Float>) {
 }
 
 @Composable
-fun NewsScreen(state: GoldState) {
+private fun NewsScreen(
+    state: GoldState,
+    notificationsEnabled: Boolean,
+    onNotificationsEnabledChange: (Boolean) -> Unit
+) {
     val context = LocalContext.current
+    val notificationsBlocked = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        ContextCompat.checkSelfPermission(
+            context, Manifest.permission.POST_NOTIFICATIONS
+        ) != PackageManager.PERMISSION_GRANTED
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            ModernCard {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("News notifications", fontWeight = FontWeight.Bold)
+                        Text(
+                            "Get a notification when a new gold headline arrives, and a reminder before big US events like CPI.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (notificationsBlocked) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Notifications are blocked in Android settings. Allow them in Settings → Apps → GoldApp → Notifications to get alerts.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = GoldRed
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Switch(
+                        checked = notificationsEnabled,
+                        onCheckedChange = onNotificationsEnabledChange
+                    )
+                }
+            }
+        }
         item {
             Text("Markets", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
@@ -587,7 +769,7 @@ fun NewsScreen(state: GoldState) {
 }
 
 @Composable
-fun CalendarScreen() {
+private fun CalendarScreen() {
     val context = LocalContext.current
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
@@ -656,7 +838,7 @@ fun CalendarScreen() {
 }
 
 @Composable
-fun DailyCheckScreen(state: GoldState, viewModel: GoldViewModel) {
+private fun DailyCheckScreen(state: GoldState, viewModel: GoldViewModel) {
     val spot = state.spotPrice
     val targetProgress = if (spot == null) 0f else (spot / REFERENCE_TARGET).toFloat().coerceIn(0f, 1f)
     val targetPercent = if (spot == null) null else (spot / REFERENCE_TARGET * 100).toInt()
