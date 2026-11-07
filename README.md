@@ -1,10 +1,24 @@
-# GoldApp v0.1 — Android gold dashboard
+# GoldApp v0.2 — Android gold dashboard
+
+## What's new in v0.2 (UI only — same data, same features)
+- **Modern logo:** a clean minimalist mark — deep charcoal rounded square
+  with three rising gold bars (light / mid / deep gold) and a rising trend
+  line. Vector drawable only, no PNGs. Same mark is shown in the app's
+  top bar next to "GoldApp".
+- **Modern dashboard:** dark-first Material 3 theme (background #0F0F0F,
+  surface #1C1C1E, gold #D4AF37, green #34C759 for up, red #FF453A for
+  down), with a light theme that follows the system. Hero price card
+  with a coloured change chip, 30-day chart with a soft gold fill and
+  faint gridlines, and DXY / 10-year yield as two side-by-side mini-cards.
+  News, Calendar and Daily Check are restyled with the same rounded
+  cards and spacing. No new features, no new permissions, no new
+  dependencies, no price/news logic changed.
 
 Your own gold app, for a beginning trader. Live gold price, a simple
 chart, the dollar and US yields that move gold, gold news, the US events
 to watch, and a short Daily Check — in one place, in simple English.
 
-No account, no API key, no login needed in v0.1. Only INTERNET permission.
+No account, no API key, no login needed in v0.2. Only INTERNET permission.
 
 ## What it does
 - **Home:** live XAU/USD spot gold price (per ounce) + daily change,
@@ -33,11 +47,11 @@ No account, no API key, no login needed in v0.1. Only INTERNET permission.
 - News: Google News RSS, `news.google.com/rss/search?q=gold+price`
   (real headlines, source, time and link, no key needed)
 
-## Honest limits — v0.1
+## Honest limits — v0.2
 - **No prediction.** No app can tell you where gold will go. GoldApp
   shows the price, the trend and the news — it never gives a buy/sell
   signal. Educational only, not financial advice.
-- **No live calendar fetch in v0.1.** The Calendar tab explains the
+- **No live calendar fetch in v0.2.** The Calendar tab explains the
   events and links to the live calendar in your browser. One event is
   listed as verified, clearly labelled: US CPI, Tue 10 Nov 2026,
   14:30 Tunis time (checked 7 Nov 2026).
