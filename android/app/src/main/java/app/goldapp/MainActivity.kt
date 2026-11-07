@@ -45,12 +45,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -89,7 +91,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.goldapp.data.ChartRange
 import app.goldapp.data.GoldState
+import app.goldapp.data.MARKET_ASSETS
+import app.goldapp.data.MarketAsset
+import app.goldapp.data.MarketCategory
 import app.goldapp.data.NewsItem
 import app.goldapp.ui.GoldViewModel
 import app.goldapp.ui.theme.GoldAccent
@@ -156,7 +162,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Tab(val label: String) { HOME("Home"), NEWS("News"), CALENDAR("Calendar"), CHECK("Daily Check") }
+private enum class Tab(val label: String) { HOME("Home"), NEWS("News"), CALENDAR("Calendar"), CHECK("Daily Check"), MARKETS("Markets Live") }
 
 /** Reference level shown on the Target card. Not a prediction, not advice. */
 private const val REFERENCE_TARGET = 4500.0
@@ -189,14 +195,14 @@ private fun GoldApp(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_launcher),
-                            contentDescription = "GoldApp logo",
+                            contentDescription = "LiveMarkets logo",
                             tint = Color.Unspecified,
                             modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp))
                         )
                         Spacer(Modifier.width(10.dp))
                         Column {
                             Text(
-                                "GoldApp",
+                                "LiveMarkets",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
@@ -233,6 +239,7 @@ private fun GoldApp(
                     Tab.NEWS -> NewsScreen(state, notificationsEnabled, onNotificationsEnabledChange)
                     Tab.CALENDAR -> CalendarScreen()
                     Tab.CHECK -> DailyCheckScreen(state, viewModel)
+                    Tab.MARKETS -> MarketsScreen(viewModel)
                 }
             }
         }
@@ -244,7 +251,7 @@ private fun GoldApp(
  * the bottom edge, like an iOS dock — NOT full-width edge-to-edge.
  * Inside it, a gold pill slides fast (~180ms tween) behind the selected
  * icon. Icons only, no text labels; modern thin-line outlined icons.
- * Same 4 tabs, same order.
+ * 5 tabs (v0.6 adds Markets Live last), same floating dock style.
  */
 @Composable
 private fun AnimatedBottomBar(selectedTab: Tab, onTabSelected: (Tab) -> Unit) {
@@ -252,7 +259,8 @@ private fun AnimatedBottomBar(selectedTab: Tab, onTabSelected: (Tab) -> Unit) {
         Tab.HOME to Icons.Outlined.Home,
         Tab.NEWS to Icons.Outlined.Article,
         Tab.CALENDAR to Icons.Outlined.DateRange,
-        Tab.CHECK to Icons.Outlined.Assessment
+        Tab.CHECK to Icons.Outlined.Assessment,
+        Tab.MARKETS to Icons.Outlined.ShowChart
     )
     val selectedIndex = tabs.indexOfFirst { it.first == selectedTab }.coerceAtLeast(0)
     // Floating dock: detached from the screen edges, rounded all around,
@@ -300,19 +308,304 @@ private fun AnimatedBottomBar(selectedTab: Tab, onTabSelected: (Tab) -> Unit) {
                                 .height(52.dp)
                                 .clickable { onTabSelected(tab) }
                         ) {
-                            Icon(
-                                icon,
-                                contentDescription = tab.label,
-                                tint = if (selected) Color(0xFF111111)
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .graphicsLayer {
-                                        scaleX = scale
-                                        scaleY = scale
-                                    }
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    icon,
+                                    contentDescription = tab.label,
+                                    tint = if (selected) Color(0xFF111111)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                        }
+                                )
+                                // Small green LIVE dot on the Markets icon.
+                                if (tab == Tab.MARKETS) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = 3.dp, y = (-3).dp)
+                                            .size(9.dp)
+                                            .background(GoldGreen, CircleShape)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Format an asset price: $ for metals/crypto, plain number for forex pairs. */
+private fun fmtAssetPrice(v: Double?, asset: MarketAsset): String {
+    if (v == null) return "—"
+    val formatted = String.format("%,.${asset.decimals}f", v)
+    return if (asset.dollarPrefix) "$" + formatted else formatted
+}
+
+private fun isWeekend(): Boolean {
+    val day = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Tunis")).dayOfWeek
+    return day == java.time.DayOfWeek.SATURDAY || day == java.time.DayOfWeek.SUNDAY
+}
+
+/** Markets tab (v0.6, LiveMarkets): category chips + asset list, tap for detail. */
+@Composable
+private fun MarketsScreen(viewModel: GoldViewModel) {
+    val quotes by viewModel.marketQuotes.collectAsState()
+    val detail by viewModel.marketDetail.collectAsState()
+    var category by remember { mutableStateOf(MarketCategory.METALS) }
+    var selected by remember { mutableStateOf<MarketAsset?>(null) }
+
+    LaunchedEffect(Unit) {
+        if (quotes.isEmpty()) viewModel.loadMarkets()
+    }
+
+    val openDetail = detail?.takeIf { it.asset == selected }
+    if (selected != null && openDetail != null) {
+        AssetDetailScreen(
+            detail = openDetail,
+            onBack = { selected = null; viewModel.clearAssetDetail() },
+            onRange = { range -> viewModel.loadAssetDetail(selected!!, range) }
+        )
+        return
+    }
+
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Text("Markets Live", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Gold, silver, crypto and the big forex pairs — live prices, tap an asset for its chart and news.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MarketCategory.values().forEach { cat ->
+                    val isSelected = cat == category
+                    Button(
+                        onClick = { category = cat },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isSelected) GoldAccent else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (isSelected) Color(0xFF111111) else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.weight(1f)
+                    ) { Text(cat.label, fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
+        val shown = MARKET_ASSETS.filter { it.category == category }
+        if (quotes.isEmpty()) {
+            item { Text("Loading live prices…") }
+        } else {
+            items(shown) { asset ->
+                val quote = quotes.firstOrNull { it.asset == asset }
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        selected = asset
+                        viewModel.loadAssetDetail(asset, ChartRange.DAY)
+                    },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth().padding(16.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(asset.name, fontWeight = FontWeight.Bold)
+                            Text(
+                                asset.symbol,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                fmtAssetPrice(quote?.price, asset),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            if (quote?.failed == true) {
+                                Text(
+                                    "couldn't load",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = GoldRed
+                                )
+                            } else {
+                                ChangeChip(quote?.changePercent)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            OutlinedButton(
+                onClick = { viewModel.loadMarkets() },
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Refresh markets") }
+        }
+        item {
+            Text(
+                "Prices: Yahoo Finance (crypto, forex, futures) and gold-api.com spot for gold and silver. Weekend: forex and metals show Friday's close — the market is closed.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/** One asset's own screen: price, chart with 1D / 1W / 1M, low-high, its own news. */
+@Composable
+private fun AssetDetailScreen(
+    detail: app.goldapp.data.MarketDetail,
+    onBack: () -> Unit,
+    onRange: (ChartRange) -> Unit
+) {
+    val context = LocalContext.current
+    val asset = detail.asset
+    val rangeLow = detail.closes.minOrNull()
+    val rangeHigh = detail.closes.maxOrNull()
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            OutlinedButton(onClick = onBack, shape = RoundedCornerShape(16.dp)) {
+                Text("← Back to Markets")
+            }
+        }
+        item {
+            Text(asset.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                asset.symbol,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        item {
+            ModernCard {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        fmtAssetPrice(detail.price, asset),
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    ChangeChip(detail.changePercent)
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    when (detail.range) {
+                        ChartRange.DAY -> "Change today"
+                        ChartRange.WEEK -> "Change over the last 5 trading days"
+                        ChartRange.MONTH -> "Change over the last 30 days"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (detail.loading) {
+                    Spacer(Modifier.height(6.dp))
+                    Text("Loading…")
+                }
+                detail.error?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, color = GoldRed, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChartRange.values().forEach { range ->
+                    val isSelected = range == detail.range
+                    Button(
+                        onClick = { if (!isSelected) onRange(range) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isSelected) GoldAccent else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (isSelected) Color(0xFF111111) else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.weight(1f)
+                    ) { Text(range.label, fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
+        item {
+            ModernCard {
+                Text(
+                    "${asset.name} chart — ${detail.range.label}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(8.dp))
+                if (detail.closes.size >= 2) {
+                    PriceChart(detail.closes)
+                } else {
+                    Text("Chart not loaded yet — tap Refresh or try another range.")
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    if (rangeLow == null || rangeHigh == null) "Range: —"
+                    else "Low ${fmtAssetPrice(rangeLow.toDouble(), asset)} — High ${fmtAssetPrice(rangeHigh.toDouble(), asset)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                if (asset.category != MarketCategory.CRYPTO && isWeekend()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Market closed (weekend) — showing Friday's close.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        item {
+            ModernCard {
+                Text("What moves it", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Text(asset.moves)
+            }
+        }
+        item {
+            Text("${asset.name} news", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Tap a headline to read it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (detail.news.isEmpty()) {
+            item { Text("No ${asset.name.lowercase()} news loaded yet.") }
+        } else {
+            items(detail.news.take(10)) { item: NewsItem ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.link)))
+                    },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(item.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "${item.source}  •  ${item.time}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -645,7 +938,7 @@ private fun NewsScreen(
                         if (notificationsBlocked) {
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "Notifications are blocked in Android settings. Allow them in Settings → Apps → GoldApp → Notifications to get alerts.",
+                                "Notifications are blocked in Android settings. Allow them in Settings → Apps → LiveMarkets → Notifications to get alerts.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = GoldRed
                             )
