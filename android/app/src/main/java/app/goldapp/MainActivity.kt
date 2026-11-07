@@ -250,7 +250,7 @@ private fun MarketMiniCard(
 }
 
 @Composable
-fun HomeScreen(state: GoldState, onRefresh: () -> Unit, onNavigate: (Tab) -> Unit) {
+private fun HomeScreen(state: GoldState, onRefresh: () -> Unit, onNavigate: (Tab) -> Unit) {
     val context = LocalContext.current
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
