@@ -11,10 +11,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,10 +47,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Article
-import androidx.compose.material.icons.filled.Assessment
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.outlined.Article
+import androidx.compose.material.icons.outlined.Assessment
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -222,8 +223,8 @@ private fun GoldApp(
             AnimatedContent(
                 targetState = tab,
                 transitionSpec = {
-                    (fadeIn() + slideInVertically { it / 6 }) togetherWith
-                        (fadeOut() + slideOutVertically { -it / 6 })
+                    (fadeIn(animationSpec = tween(180, easing = FastOutSlowInEasing)) + slideInVertically(animationSpec = tween(180, easing = FastOutSlowInEasing)) { it / 6 }) togetherWith
+                        (fadeOut(animationSpec = tween(180, easing = FastOutSlowInEasing)) + slideOutVertically(animationSpec = tween(180, easing = FastOutSlowInEasing)) { -it / 6 })
                 },
                 label = "tabSwitch"
             ) { currentTab ->
@@ -239,78 +240,79 @@ private fun GoldApp(
 }
 
 /**
- * Animated bottom bar (v0.4): a gold pill slides between tabs on a spring,
- * the selected icon pops (scale ~1.15, slight lift) and its label turns
- * bold gold. Unselected tabs stay grey. Same 4 tabs, same order.
+ * Floating dock bottom nav (v0.5): a detached rounded box floating above
+ * the bottom edge, like an iOS dock — NOT full-width edge-to-edge.
+ * Inside it, a gold pill slides fast (~180ms tween) behind the selected
+ * icon. Icons only, no text labels; modern thin-line outlined icons.
+ * Same 4 tabs, same order.
  */
 @Composable
 private fun AnimatedBottomBar(selectedTab: Tab, onTabSelected: (Tab) -> Unit) {
     val tabs = listOf(
-        Tab.HOME to Icons.Filled.Home,
-        Tab.NEWS to Icons.Filled.Article,
-        Tab.CALENDAR to Icons.Filled.DateRange,
-        Tab.CHECK to Icons.Filled.Assessment
+        Tab.HOME to Icons.Outlined.Home,
+        Tab.NEWS to Icons.Outlined.Article,
+        Tab.CALENDAR to Icons.Outlined.DateRange,
+        Tab.CHECK to Icons.Outlined.Assessment
     )
     val selectedIndex = tabs.indexOfFirst { it.first == selectedTab }.coerceAtLeast(0)
-    Surface(color = MaterialTheme.colorScheme.surface) {
-        BoxWithConstraints(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+    // Floating dock: detached from the screen edges, rounded all around,
+    // with a soft shadow. Padding lives on the outer Box so the Scaffold
+    // bottomBar slot still reserves the space and content is not hidden.
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(32.dp),
+            shadowElevation = 8.dp
         ) {
-            val itemWidth = maxWidth / tabs.size
-            val pillOffset by animateDpAsState(
-                targetValue = itemWidth * selectedIndex,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                ),
-                label = "pillSlide"
-            )
-            // Gold sliding pill behind the selected tab.
-            Box(
-                modifier = Modifier
-                    .offset(x = pillOffset + 8.dp, y = 0.dp)
-                    .size(width = itemWidth - 16.dp, height = 52.dp)
-                    .background(GoldAccent, RoundedCornerShape(26.dp))
-            )
-            Row(modifier = Modifier.fillMaxWidth()) {
-                tabs.forEach { (tab, icon) ->
-                    val selected = tab == selectedTab
-                    val scale by animateFloatAsState(
-                        targetValue = if (selected) 1.15f else 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        ),
-                        label = "iconPop"
-                    )
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { onTabSelected(tab) }
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Icon(
-                            icon,
-                            contentDescription = tab.label,
-                            tint = if (selected) Color(0xFF111111)
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+            ) {
+                val itemWidth = maxWidth / tabs.size
+                val pillOffset by animateDpAsState(
+                    targetValue = itemWidth * selectedIndex,
+                    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                    label = "pillSlide"
+                )
+                // Gold sliding pill behind the selected tab.
+                Box(
+                    modifier = Modifier
+                        .offset(x = pillOffset + 8.dp, y = 0.dp)
+                        .size(width = itemWidth - 16.dp, height = 52.dp)
+                        .background(GoldAccent, RoundedCornerShape(26.dp))
+                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    tabs.forEach { (tab, icon) ->
+                        val selected = tab == selectedTab
+                        val scale by animateFloatAsState(
+                            targetValue = if (selected) 1.15f else 1f,
+                            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                            label = "iconPop"
+                        )
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .size(24.dp)
-                                .graphicsLayer {
-                                    scaleX = scale
-                                    scaleY = scale
-                                    translationY = if (selected) -4f else 0f
-                                }
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            tab.label,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selected) Color(0xFF111111)
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                                .weight(1f)
+                                .height(52.dp)
+                                .clickable { onTabSelected(tab) }
+                        ) {
+                            Icon(
+                                icon,
+                                contentDescription = tab.label,
+                                tint = if (selected) Color(0xFF111111)
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .graphicsLayer {
+                                        scaleX = scale
+                                        scaleY = scale
+                                    }
+                            )
+                        }
                     }
                 }
             }
