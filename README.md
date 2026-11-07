@@ -1,4 +1,33 @@
-# GoldApp v0.3 — Android gold dashboard
+# GoldApp v0.4 — Android gold dashboard
+
+## What's new in v0.4 (animated nav + local notifications)
+- **Animated bottom nav:** the plain grey-purple NavigationBar is gone.
+  A custom bottom bar has a gold pill that slides between Home / News /
+  Calendar / Daily Check on a spring, the selected icon pops (about
+  1.15×, slight lift) and its label turns bold gold, and the screen
+  content fades + slides in (AnimatedContent) instead of swapping
+  instantly. Same 4 tabs, same order, same screens and data.
+- **News notifications (local, on-device only — no server, no Firebase,
+  no account):** a WorkManager job checks the gold news feed every
+  30 minutes (only with network) using the existing repository fetch.
+  When the top headline is new, it posts ONE notification — title
+  "Gold news", text = the headline. Tap it and the app opens on the
+  News tab. At most one notification per check; the first run after
+  install only records the current headline and does not notify for it.
+- **Event reminder:** the same job posts ONE reminder for US CPI,
+  Tue 10 Nov 2026, 14:30 Tunis time — "tomorrow" if it is the day
+  before, "today" on the day — only in the 24 hours before the event.
+  Tap it and the app opens on the Calendar tab.
+- **Allow notifications step:** on first launch (Android 13+) the app
+  asks once "Allow GoldApp to send notifications?". Tap Allow, or no
+  notifications will appear. If blocked, the News tab says so and
+  tells you where to turn it on (Settings → Apps → GoldApp →
+  Notifications). A switch on the News tab turns notifications on/off
+  (default ON; OFF cancels the background job).
+- **Limits, honestly:** checks run every 30 minutes, so a headline can
+  take up to 30 minutes to notify. Android may delay background work
+  when the battery is low. If the news fetch fails, the job posts
+  nothing. No fake notifications, no test headline.
 
 ## What's new in v0.3 (UI only — same data, same features)
 - **Light finance template, as approved from the mockup:** light
@@ -39,7 +68,8 @@ Your own gold app, for a beginning trader. Live gold price, a simple
 chart, the dollar and US yields that move gold, gold news, the US events
 to watch, and a short Daily Check — in one place, in simple English.
 
-No account, no API key, no login needed in v0.3. Only INTERNET permission.
+No account, no API key, no login needed in v0.4. Only INTERNET
+permission, plus POST_NOTIFICATIONS (Android 13+) for the news alerts.
 
 ## What it does
 - **Home:** live XAU/USD spot gold price (per ounce) + daily change,
